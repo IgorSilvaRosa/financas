@@ -166,13 +166,13 @@ function openForm(k,id,pre){
     else if(t==='day')inp='<input type="number" min="1" max="31" name="'+f+'" value="'+esc(v)+'" required>';
     else if(t==='month')inp='<input type="month" name="'+f+'" value="'+esc(v)+'" required>';else if(t==='shared')inp='<label style="display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" name="'+f+'"'+(v?' checked':'')+' onchange="document.getElementById(\'pb\').style.display=this.checked?\'block\':\'none\'"> '+l+'</label>';else if(t==='payer')inp='<label id="pb" style="display:'+(it.shared?'block':'none')+'">'+l+'<select name="'+f+'">'+['Igor','Patricia'].map(w=>'<option'+(w===v?' selected':'')+'>'+w+'</option>').join('')+'</select></label>';else if(t==='paid')inp='<label style="display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" name="'+f+'"'+(v?' checked':'')+'> '+l+'</label>';else if(t==='color')inp='<input type="color" name="'+f+'" value="'+esc(v)+'">';
     else if(t==='who')inp='<select name="'+f+'">'+WHO.map(w=>'<option'+(w===v?' selected':'')+'>'+w+'</option>').join('')+'</select>';
-    else if(t==='card')inp='<select name="'+f+'"><option value="">— nenhum —</option>'+S.cards.map(c=>'<option value="'+c.id+'"'+(c.id===v?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select>';
+    else if(t==='card')inp='<select name="'+f+'" onchange="const b=document.getElementById(\'ib\');if(b)b.style.display=this.value?\'block\':\'none\'"><option value="">— nenhum —</option>'+S.cards.map(c=>'<option value="'+c.id+'"'+(c.id===v?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select>';
     else if(t.startsWith('cat:')){const ty=t.slice(4),cs=S.categories.filter(c=>c.type===ty).sort(byName);inp='<select name="'+f+'" required onchange="this.nextElementSibling.style.display=this.value===\'__new\'?\'block\':\'none\'">'+(cs.length?'<option value="">Selecione…</option>':'')+cs.map(c=>'<option value="'+c.id+'"'+(c.id===v?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'<option value="__new"'+(cs.length?'':' selected')+'>+ Nova categoria…</option></select><div style="display:'+(cs.length?'none':'block')+'"><input name="newcat_'+f+'" placeholder="Nome da nova categoria"></div>'}
     else if(t.startsWith('sel:'))inp='<select name="'+f+'">'+t.slice(4).split(',').map(o=>'<option'+(o===v?' selected':'')+'>'+o+'</option>').join('')+'</select>';
     return ['paid','shared','payer'].includes(t)?inp:'<label>'+l+inp+'</label>';
   }).join('');
   const d=$('#dlg');
-  d.innerHTML='<form method="dialog" id="fm"><h2 style="margin:0">'+(id?'Editar ':'Nova ')+cfg.t.toLowerCase()+'</h2>'+row+'<div class="act"><button type="button" class="b" id="cn">Cancelar</button><button class="b p">Salvar</button></div></form>';
+  d.innerHTML='<form method="dialog" id="fm"><h2 style="margin:0">'+(id?'Editar ':'Nova ')+cfg.t.toLowerCase()+'</h2>'+row+((k==='expenses'&&!id)?instHtml((pre&&pre.card)||''):'')+'<div class="act"><button type="button" class="b" id="cn">Cancelar</button><button class="b p">Salvar</button></div></form>';
   $('#cn').onclick=()=>d.close();
   $('#fm').onsubmit=e=>{
     e.preventDefault();
@@ -183,7 +183,13 @@ function openForm(k,id,pre){
       else if(t==='day')v=Math.min(31,Math.max(1,parseInt(v)||1));
       vals[f]=v;
     }
-    Object.assign(o,vals);S.categories.push(...nc);if(!id)S[k].push(o);
+    S.categories.push(...nc);
+    const n=(!id&&k==='expenses'&&vals.card)?Math.min(48,Math.max(1,parseInt(fd.get('n'))||1)):1;
+    if(n>1){
+      const tot=fd.get('mode')==='parc'?vals.amount*n:vals.amount,base=Math.floor(tot/n),rem=tot-base*n,grp=uid();
+      for(let i=0;i<n;i++){const m=addM(vals.date.slice(0,7),i);S.expenses.push({...vals,id:uid(),grp,inst:i+1,of:n,amount:base+(i<rem?1:0),date:dayIn(m,+vals.date.slice(8,10)),desc:vals.desc+' ('+(i+1)+'/'+n+')',paid:false})}
+      toast(n+' parcelas lançadas')
+    }else{Object.assign(o,vals);if(!id)S[k].push(o)}
     save();d.close();render();
   };
   d.showModal();
@@ -272,7 +278,7 @@ function invoices(){
   return S.cards.map(c=>{
     const it=invItems(c,ym).sort((a,b)=>b.date.localeCompare(a.date)),bl=S.bills.filter(b=>b.card===c.id),pd=!!S.paid['inv:'+c.id+':'+ym];
     return '<div class="c"><div class="bh"><b>Fatura '+esc(c.name)+' · '+brl(invTotal(c,ym))+'</b><span><label style="display:inline;color:inherit"><input type="checkbox" '+(pd?'checked ':'')+'onchange="togglePay(\'inv\',\''+c.id+'\')"> paga</label> <button class="b p" onclick="openForm(\'expenses\',null,{card:\''+c.id+'\'})">+ Compra</button></span></div><div class="mut" style="font-size:12px;margin-bottom:6px">vence dia '+c.due+' · fecha dia '+c.closing+'</div><div class="tw"><table>'+
-    it.map(e=>'<tr><td>'+fmt('date',e)+'</td><td>'+esc(e.desc)+'</td><td>'+fmt('cat',e)+'</td><td class="a">'+brl(e.amount)+'</td><td class="a"><button class="b" onclick="openForm(\'expenses\',\''+e.id+'\')">Editar</button> <button class="b d" onclick="del(\'expenses\',\''+e.id+'\',this)">Excluir</button></td></tr>').join('')+
+    it.map(e=>'<tr><td>'+fmt('date',e)+'</td><td>'+esc(e.desc)+'</td><td>'+fmt('cat',e)+'</td><td class="a">'+brl(e.amount)+'</td><td class="a"><button class="b" onclick="openForm(\'expenses\',\''+e.id+'\')">Editar</button> <button class="b d" onclick="del(\'expenses\',\''+e.id+'\',this)">Excluir</button>'+(e.grp?' <button class="b d" onclick="delGrp(\''+e.grp+'\',this)">Excluir todas</button>':'')+'</td></tr>').join('')+
     bl.map(b=>'<tr><td>dia '+b.due+'</td><td>'+esc(b.name)+' <span class="tag">conta fixa</span></td><td>'+fmt('cat',b)+'</td><td class="a">'+brl(b.amount)+'</td><td></td></tr>').join('')+
     (it.length+bl.length?'':'<tr><td class="mut">Sem compras nesta fatura.</td></tr>')+'</table></div></div>';
   }).join('');
@@ -332,6 +338,8 @@ function backup(){
   $('#im').onchange=async e=>{try{const o=JSON.parse(await e.target.files[0].text());if(!o.categories)throw 0;S={...S,...o};save();d.close();render();toast('Dados importados')}catch(x){toast('Arquivo inválido')}};
   d.showModal();
 }
+function instHtml(c){return '<div id="ib" style="display:'+(c?'block':'none')+'"><label>Parcelas<input type="number" min="1" max="48" name="n" value="1"></label><label>O valor informado é<select name="mode"><option value="total">o valor total (o sistema divide pelas parcelas)</option><option value="parc">o valor de cada parcela (o sistema repete)</option></select></label></div>'}
+function delGrp(g,btn){if(!btn.dataset.c){btn.dataset.c=1;btn.textContent='Confirmar?';setTimeout(()=>{btn.dataset.c='';btn.textContent='Excluir todas'},2500);return}S.expenses=S.expenses.filter(e=>e.grp!==g);save();render()}
 function render(){
   $('#me').textContent=ME?'👤 '+ME:'👤 Entrar';
   $('#nav').innerHTML=Object.keys(TITLES).map(t=>'<button class="'+(t===tab?'on':'')+'" onclick="go(\''+t+'\')">'+TITLES[t]+'</button>').join('');
