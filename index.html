@@ -51,11 +51,19 @@ input[type=color]{height:40px;padding:3px}
 input[type=checkbox]{width:auto;margin:0}
 .act{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:8px 14px;border-radius:8px;display:none;z-index:20}
+.fbar{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.seg{display:inline-flex;border:1px solid var(--bd);border-radius:10px;overflow:hidden;background:var(--card)}
+.seg label{position:relative;margin:0;font-size:14px;color:var(--tx);display:block}
+.seg label+label{border-left:1px solid var(--bd)}
+.seg input{position:absolute;opacity:0;width:0;height:0;margin:0;padding:0;border:0}
+.seg span{display:block;padding:7px 16px;cursor:pointer;user-select:none;white-space:nowrap}
+.seg input:checked+span{background:var(--pri);color:#fff;font-weight:600}
+.seg input:focus-visible+span{outline:2px solid var(--pri);outline-offset:-2px}
 </style>
 </head>
 <body>
 <header>
- <div class="top"><h1>💰 Finanças · Igor & Patricia</h1><span style="display:flex;gap:8px;align-items:center"><span id="sync" class="mut" style="font-size:12px"></span><button class="b" title="Backup" onclick="backup()">⬇⬆</button><button class="b" id="me" title="Sair" onclick="signOut()"></button></span></div>
+ <div class="top"><h1>💰 Finanças · Igor & Patricia</h1><span style="display:flex;gap:8px;align-items:center"><span id="sync" class="mut" style="font-size:12px"></span><button class="b" title="Backup" onclick="backup()">⬇⬆</button><button class="b" id="me" title="Usuário / sair" onclick="meClick()"></button></span></div>
  <nav id="nav"></nav>
 </header>
 <main id="app"></main>
@@ -127,6 +135,7 @@ async function init(){
   sb.channel('st').on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_state'},()=>pull(false)).subscribe();
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)pull(false)});
 }
+function meClick(){signOut()}
 
 /* ---------- entidades ---------- */
 const F={
@@ -139,6 +148,8 @@ const F={
 };
 const TITLES={dash:'Dashboard',income:'Receitas',expenses:'Despesas',shared:'Compartilhadas',cards:'Cartões',bills:'Contas fixas',categories:'Categorias'};
 const MONTHLY=['dash','income','expenses','bills','cards','shared'];
+const FILTERED=['dash','income','expenses','bills','cards'];let FILT=null;
+const vis=x=>{if(!FILT)return true;if(x.who==='Igor'||x.who==='Patricia')return FILT[x.who];return FILT.Igor&&FILT.Patricia};
 
 function fmt(f,it,k){
   const v=it[f];
@@ -209,7 +220,7 @@ function monthBar(){const [y,m]=ym.split('-');return '<div class="mon"><button c
 /* ---------- telas ---------- */
 function list(k){
   if(k==='expenses')return listExp();
-  const cfg=F[k];let items=S[k].slice();
+  const cfg=F[k];let items=S[k].slice();if(['income','bills','cards'].includes(k))items=items.filter(vis);
   if(k==='income')items=items.filter(i=>i.date.startsWith(ym));
   if(k==='expenses')items=items.filter(i=>invYm(i)===ym);
   if(k==='income'||k==='expenses')items.sort((a,b)=>b.date.localeCompare(a.date));
@@ -221,20 +232,20 @@ function list(k){
   return h+'</table></div>';
 }
 function dash(){
-  const inc=S.income.filter(i=>i.date.startsWith(ym)),exp=S.expenses.filter(e=>invYm(e)===ym);
+  const inc=S.income.filter(i=>i.date.startsWith(ym)&&vis(i)),exp=S.expenses.filter(e=>invYm(e)===ym&&vis(e));
   const er=expRows(ym),rec=sum(inc),des=sum(er),sal=rec-des;
   const by={};
-  exp.concat(S.bills).forEach(x=>{by[x.cat]=(by[x.cat]||0)+x.amount});
+  exp.concat(S.bills.filter(vis)).forEach(x=>{by[x.cat]=(by[x.cat]||0)+x.amount});
   const rows=Object.entries(by).sort((a,b)=>b[1]-a[1]);
   const max=rows.length?rows[0][1]:1;
   let h='<div class="grid"><div class="c"><h2>Receitas</h2><div class="big ok">'+brl(rec)+'</div><div class="mut">Recebido: '+brl(sum(inc.filter(i=>i.paid)))+'</div></div><div class="c"><h2>Despesas (com contas fixas)</h2><div class="big bad">'+brl(des)+'</div><div class="mut">Pago: '+brl(sum(er.filter(r=>r.paid)))+' · A pagar: '+brl(des-sum(er.filter(r=>r.paid)))+'</div></div><div class="c"><h2>Saldo do mês</h2><div class="big '+(sal>=0?'ok':'bad')+'">'+brl(sal)+'</div></div></div>';
   h+=shareCard();h+=balCard();h+='<div class="c"><h2>Gastos por categoria</h2>'+(rows.map(([id,v])=>{const c=cat(id);return '<div class="row"><span style="width:110px;overflow:hidden;text-overflow:ellipsis">'+esc(c?c.name:'—')+'</span><div class="bar"><i style="width:'+(v/max*100)+'%;background:'+esc(c?c.color:'#999')+'"></i></div><span style="min-width:90px;text-align:right">'+brl(v)+'</span></div>'}).join('')||'<span class="mut">Sem despesas neste mês.</span>')+'</div>';
-  h+='<div class="c"><h2>Faturas dos cartões</h2>'+(S.cards.map(c=>{
-    const v=sum(exp.filter(e=>e.card===c.id))+sum(S.bills.filter(b=>b.card===c.id));
+  h+='<div class="c"><h2>Faturas dos cartões</h2>'+(S.cards.filter(vis).map(c=>{
+    const v=sum(exp.filter(e=>e.card===c.id))+sum(S.bills.filter(b=>b.card===c.id&&vis(b)));
     const p=c.limit?Math.min(100,v/c.limit*100):0;
     return '<div class="row"><span style="width:110px">'+esc(c.name)+'</span><div class="bar"><i style="width:'+p+'%;background:'+(p>80?'var(--bad)':'var(--pri)')+'"></i></div><span style="min-width:150px;text-align:right">'+brl(v)+' <span class="mut">/ '+brl(c.limit)+'</span></span></div><div class="mut" style="font-size:12px">vence dia '+c.due+' · fecha dia '+c.closing+'</div>';
   }).join('')||'<span class="mut">Nenhum cartão cadastrado.</span>')+'</div>';
-  const bills=S.bills.slice().sort((a,b)=>a.due-b.due);
+  const bills=S.bills.filter(vis).sort((a,b)=>a.due-b.due);
   h+='<div class="c"><h2>Contas fixas do mês</h2>'+(bills.map(b=>{
     const p=!!S.paid[b.id+':'+ym];
     const late=!p&&(ym<todayISO().slice(0,7)||(ym===todayISO().slice(0,7)&&b.due<now.getDate()));
@@ -251,11 +262,11 @@ const dim=s=>new Date(+s.slice(0,4),+s.slice(5,7),0).getDate();
 const dayIn=(s,d)=>s+'-'+pad(Math.min(d,dim(s)));
 function cardCatId(){const c=S.categories.find(c=>c.name==='Cartão de crédito'&&c.type==='despesa');return c?c.id:''}
 function ensureCardCat(){if(!cardCatId()){S.categories.push({id:uid(),name:'Cartão de crédito',type:'despesa',color:'#c0489b'});save()}}
-function invItems(c,m){return S.expenses.filter(e=>e.card===c.id&&invYm(e)===m)}
-function invTotal(c,m){return sum(invItems(c,m))+sum(S.bills.filter(b=>b.card===c.id))}
+function invItems(c,m){return S.expenses.filter(e=>e.card===c.id&&invYm(e)===m&&vis(e))}
+function invTotal(c,m){return sum(invItems(c,m))+sum(S.bills.filter(b=>b.card===c.id&&vis(b)))}
 function expRows(m){
-  const r=S.expenses.filter(e=>!e.card&&e.date.startsWith(m)).map(e=>({...e,k:'expenses'}));
-  S.bills.filter(b=>!b.card).forEach(b=>r.push({id:b.id,k:'bill',desc:b.name,amount:b.amount,date:dayIn(m,b.due),cat:b.cat,who:b.who,shared:b.shared,paid:!!S.paid[b.id+':'+m]}));
+  const r=S.expenses.filter(e=>!e.card&&e.date.startsWith(m)&&vis(e)).map(e=>({...e,k:'expenses'}));
+  S.bills.filter(b=>!b.card&&vis(b)).forEach(b=>r.push({id:b.id,k:'bill',desc:b.name,amount:b.amount,date:dayIn(m,b.due),cat:b.cat,who:b.who,shared:b.shared,paid:!!S.paid[b.id+':'+m]}));
   S.cards.forEach(c=>{const t=invTotal(c,m);if(t>0)r.push({id:c.id,k:'inv',desc:'Fatura '+c.name+' (ref. '+MN[+(c.sameMonth?m:addM(m,-1)).slice(5)-1].toLowerCase()+')',amount:t,date:dayIn(m,c.due),cat:cardCatId(),who:c.who,paid:!!S.paid['inv:'+c.id+':'+m]})});
   return r.sort((a,b)=>b.date.localeCompare(a.date));
 }
@@ -275,8 +286,8 @@ function listExp(){
   return h+'</table></div>';
 }
 function invoices(){
-  return S.cards.map(c=>{
-    const it=invItems(c,ym).sort((a,b)=>b.date.localeCompare(a.date)),bl=S.bills.filter(b=>b.card===c.id),pd=!!S.paid['inv:'+c.id+':'+ym];
+  return S.cards.filter(vis).map(c=>{
+    const it=invItems(c,ym).sort((a,b)=>b.date.localeCompare(a.date)),bl=S.bills.filter(b=>b.card===c.id&&vis(b)),pd=!!S.paid['inv:'+c.id+':'+ym];
     return '<div class="c"><div class="bh"><b>Fatura '+esc(c.name)+' · '+brl(invTotal(c,ym))+'</b><span><label style="display:inline;color:inherit"><input type="checkbox" '+(pd?'checked ':'')+'onchange="togglePay(\'inv\',\''+c.id+'\')"> paga</label> <button class="b p" onclick="openForm(\'expenses\',null,{card:\''+c.id+'\'})">+ Compra</button></span></div><div class="mut" style="font-size:12px;margin-bottom:6px">vence dia '+c.due+' · fecha dia '+c.closing+'</div><div class="tw"><table>'+
     it.map(e=>'<tr><td>'+fmt('date',e)+'</td><td>'+esc(e.desc)+'</td><td>'+fmt('cat',e)+'</td><td class="a">'+brl(e.amount)+'</td><td class="a"><button class="b" onclick="openForm(\'expenses\',\''+e.id+'\')">Editar</button> <button class="b d" onclick="del(\'expenses\',\''+e.id+'\',this)">Excluir</button>'+(e.grp?' <button class="b d" onclick="delGrp(\''+e.grp+'\',this)">Excluir todas</button>':'')+'</td></tr>').join('')+
     bl.map(b=>'<tr><td>dia '+b.due+'</td><td>'+esc(b.name)+' <span class="tag">conta fixa</span></td><td>'+fmt('cat',b)+'</td><td class="a">'+brl(b.amount)+'</td><td></td></tr>').join('')+
@@ -328,7 +339,7 @@ function bal(m){
 function balCard(){
   const b=bal(ym);
   const col=P=>'<div class="c"><h2>'+P+'</h2><div class="big '+(b[P].saldo>=0?'ok':'bad')+'">'+brl(b[P].saldo)+'</div><div class="mut" style="font-size:12px;line-height:1.7">Receitas '+brl(b[P].rec)+'<br>Despesas próprias −'+brl(b[P].own)+'<br>Compartilhadas pagas −'+brl(b[P].sp)+'<br>Pix '+(b[P].pix>0?'enviado −':b[P].pix<0?'recebido +':'')+brl(Math.abs(b[P].pix))+'</div></div>';
-  return '<div class="c"><h2>Saldo por pessoa (com o Pix de acerto registrado)</h2><div class="grid" style="margin:0">'+col('Igor')+col('Patricia')+'</div>'+(b.sem?'<div class="mut" style="font-size:12px;margin-top:8px">Despesas sem dono ("Família"): '+brl(b.sem)+' — não entram no saldo de ninguém.</div>':'')+'</div>';
+  return '<div class="c"><h2>Saldo por pessoa (com o Pix de acerto registrado)</h2><div class="grid" style="margin:0">'+['Igor','Patricia'].filter(P=>!FILT||FILT[P]).map(col).join('')+'</div>'+(b.sem?'<div class="mut" style="font-size:12px;margin-top:8px">Despesas sem dono ("Família"): '+brl(b.sem)+' — não entram no saldo de ninguém.</div>':'')+'</div>';
 }
 function backup(){
   const d=$('#dlg');
@@ -340,10 +351,17 @@ function backup(){
 }
 function instHtml(c){return '<div id="ib" style="display:'+(c?'block':'none')+'"><label>Parcelas<input type="number" min="1" max="48" name="n" value="1"></label><label>O valor informado é<select name="mode"><option value="total">o valor total (o sistema divide pelas parcelas)</option><option value="parc">o valor de cada parcela (o sistema repete)</option></select></label></div>'}
 function delGrp(g,btn){if(!btn.dataset.c){btn.dataset.c=1;btn.textContent='Confirmar?';setTimeout(()=>{btn.dataset.c='';btn.textContent='Excluir todas'},2500);return}S.expenses=S.expenses.filter(e=>e.grp!==g);save();render()}
+function filtMode(){return FILT&&FILT.Igor&&FILT.Patricia?'Ambos':FILT&&FILT.Igor?'Igor':'Patricia'}
+function filtBar(){
+  const cur=filtMode(),op=v=>'<label><input type="radio" name="fp" value="'+v+'"'+(cur===v?' checked':'')+' onchange="setFilt(\''+v+'\')"><span>'+v+(v===ME?' (você)':'')+'</span></label>';
+  return '<div class="fbar"><span class="mut">Visualizar</span><div class="seg" role="radiogroup" aria-label="Visualizar registros de">'+op('Igor')+op('Patricia')+op('Ambos')+'</div></div>';
+}
+function setFilt(m){FILT={Igor:m!=='Patricia',Patricia:m!=='Igor'};render()}
 function render(){
+  if(!FILT&&ME)FILT={Igor:ME==='Igor',Patricia:ME==='Patricia'};
   $('#me').textContent=ME?'👤 '+ME:'👤 Entrar';
   $('#nav').innerHTML=Object.keys(TITLES).map(t=>'<button class="'+(t===tab?'on':'')+'" onclick="go(\''+t+'\')">'+TITLES[t]+'</button>').join('');
-  $('#app').innerHTML=(MONTHLY.includes(tab)?monthBar():'')+(tab==='dash'?dash():tab==='shared'?sharedTab():list(tab)+(tab==='cards'?invoices():''));
+  $('#app').innerHTML=(FILTERED.includes(tab)?filtBar():'')+(MONTHLY.includes(tab)?monthBar():'')+(tab==='dash'?dash():tab==='shared'?sharedTab():list(tab)+(tab==='cards'?invoices():''));
 }
 init();
 </script>
