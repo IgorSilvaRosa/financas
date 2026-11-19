@@ -140,10 +140,10 @@ function meClick(){signOut()}
 
 /* ---------- entidades ---------- */
 const F={
- income:{t:'Receita',fl:[['desc','Descrição','text'],['amount','Valor','money'],['date','Data','date'],['cat','Categoria','cat:receita'],['paid','Recebido','paid'],['who','Quem','who']]},
- expenses:{t:'Despesa',fl:[['desc','Descrição','text'],['amount','Valor','money'],['date','Data','date'],['cat','Categoria','cat:despesa'],['paid','Pago','paid'],['shared','Compartilhada (dividir entre Igor e Patricia)','shared'],['payer','Quem pagou','payer'],['card','Cartão (opcional)','card'],['who','Quem','who']]},
+ income:{t:'Receita',fl:[['desc','Descrição','text'],['amount','Valor','money'],['date','Data','date'],['cat','Categoria','cat:receita'],['paid','Recebido','paid'],['who','Quem (dono do registro)','who']]},
+ expenses:{t:'Despesa',fl:[['desc','Descrição','text'],['amount','Valor','money'],['date','Data','date'],['cat','Categoria','cat:despesa'],['paid','Pago','paid'],['shared','Compartilhada (dividir entre Igor e Patricia)','shared'],['payer','Quem pagou','payer'],['card','Cartão (opcional)','card'],['who','Quem (dono do registro)','who']]},
  cards:{t:'Cartão',fl:[['name','Nome','text'],['limit','Limite','money'],['closing','Dia de fechamento','day'],['due','Dia de vencimento','day'],['sameMonth','Vence no mesmo mês do fechamento','paid'],['who','Titular','who']]},
- bills:{t:'Conta fixa',fl:[['name','Nome','text'],['amount','Valor','money'],['due','Dia de vencimento','day'],['from','Vale a partir de','month'],['kind','Tipo','sel:despesa,receita'],['cat','Categoria','cat:despesa'],['shared','Compartilhada (dividir entre Igor e Patricia)','shared'],['payer','Quem pagou','payer'],['card','Cartão (opcional)','card'],['who','Quem','who']]},
+ bills:{t:'Conta fixa',fl:[['name','Nome','text'],['amount','Valor','money'],['due','Dia de vencimento','day'],['from','Vale a partir de','month'],['kind','Tipo','sel:despesa,receita'],['cat','Categoria','cat:despesa'],['shared','Compartilhada (dividir entre Igor e Patricia)','shared'],['payer','Quem pagou','payer'],['card','Cartão (opcional)','card'],['who','Quem (dono do registro)','who']]},
  settle:{t:'Acerto',fl:[['from','Quem enviou o Pix','sel:Igor,Patricia'],['amount','Valor','money'],['date','Data','date'],['ref','Referente ao mês','month']]},
  categories:{t:'Categoria',fl:[['name','Nome','text'],['type','Tipo','sel:receita,despesa'],['color','Cor','color']]}
 };
@@ -169,15 +169,15 @@ function parseMoney(v){
 }
 function openForm(k,id,pre){
   const cfg=F[k],it=id?(k==='bills'?(billsAt(ym).find(x=>x.id===id)||S.bills.find(x=>x.id===id)):S[k].find(x=>x.id===id)):{};
-  const defs={date:todayISO(),who:'Família',closing:5,due:10,payer:ME||'Igor',ref:ym,kind:'despesa',from:ym,color:PAL[S.categories.length%PAL.length],type:'despesa',...(pre||{})};
+  const defs={date:todayISO(),who:ME||'Igor',closing:5,due:10,payer:ME||'Igor',ref:ym,kind:'despesa',from:ym,color:PAL[S.categories.length%PAL.length],type:'despesa',...(pre||{})};
   const row=cfg.fl.map(([f,l,t])=>{
-    if(t==='who'&&ME)return '';let v=it[f]!==undefined?it[f]:defs[f];let inp='';
+    let v=it[f]!==undefined?it[f]:defs[f];let inp='';
     if(t==='text')inp='<input name="'+f+'" value="'+esc(v||'')+'" required>';
     else if(t==='money')inp='<input name="'+f+'" inputmode="decimal" placeholder="0,00" value="'+(v?(v/100).toFixed(2).replace('.',','):'')+'" required>';
     else if(t==='date')inp='<input type="date" name="'+f+'" value="'+esc(v)+'" required>';
     else if(t==='day')inp='<input type="number" min="1" max="31" name="'+f+'" value="'+esc(v)+'" required>';
     else if(t==='month')inp='<input type="month" name="'+f+'" value="'+esc(v)+'" required>';else if(t==='shared')inp='<label style="display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" name="'+f+'"'+(v?' checked':'')+' onchange="document.getElementById(\'pb\').style.display=this.checked?\'block\':\'none\'"> '+l+'</label>';else if(t==='payer')inp='<label id="pb" style="display:'+(it.shared?'block':'none')+'">'+l+'<select name="'+f+'">'+['Igor','Patricia'].map(w=>'<option'+(w===v?' selected':'')+'>'+w+'</option>').join('')+'</select></label>';else if(t==='paid')inp='<label style="display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" name="'+f+'"'+(v?' checked':'')+'> '+l+'</label>';else if(t==='color')inp='<input type="color" name="'+f+'" value="'+esc(v)+'">';
-    else if(t==='who')inp='<select name="'+f+'">'+WHO.map(w=>'<option'+(w===v?' selected':'')+'>'+w+'</option>').join('')+'</select>';
+    else if(t==='who')inp='<select name="'+f+'" onchange="const p=document.querySelector(\'#fm select[name=payer]\');if(p&&this.value!==\'Família\')p.value=this.value">'+(it.who==='Família'?WHO:['Igor','Patricia']).map(w=>'<option'+(w===v?' selected':'')+'>'+w+'</option>').join('')+'</select>';
     else if(t==='card')inp='<select name="'+f+'" onchange="const b=document.getElementById(\'ib\');if(b)b.style.display=this.value?\'block\':\'none\'"><option value="">— nenhum —</option>'+S.cards.map(c=>'<option value="'+c.id+'"'+(c.id===v?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select>';
     else if(t.startsWith('cat:')){const ty=(k==='bills'&&it.kind==='receita')?'receita':t.slice(4),cs=S.categories.filter(c=>c.type===ty).sort(byName);inp='<select name="'+f+'" required onchange="this.nextElementSibling.style.display=this.value===\'__new\'?\'block\':\'none\'">'+(cs.length?'<option value="">Selecione…</option>':'')+cs.map(c=>'<option value="'+c.id+'"'+(c.id===v?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'<option value="__new"'+(cs.length?'':' selected')+'>+ Nova categoria…</option></select><div style="display:'+(cs.length?'none':'block')+'"><input name="newcat_'+f+'" placeholder="Nome da nova categoria"></div>'}
     else if(t.startsWith('sel:'))inp='<select name="'+f+'"'+(f==='kind'?' onchange="refKind(this.value)"':'')+'>'+t.slice(4).split(',').map(o=>'<option'+(o===v?' selected':'')+'>'+o+'</option>').join('')+'</select>';
@@ -193,7 +193,7 @@ function openForm(k,id,pre){
     const ag=again;again=false;
     const fd=new FormData(e.target),o=id?it:{id:uid()},vals={},nc=[];
     for(const [f,l,t] of cfg.fl){
-      let v=fd.get(f);if(t==='paid'||t==='shared'){vals[f]=!!v;continue}if(t==='who'&&ME){vals[f]=it[f]||ME;continue}if(t.startsWith('cat:')&&v==='__new'){const nm=String(fd.get('newcat_'+f)||'').trim();if(!nm){toast('Digite o nome da nova categoria');return}const ty=(k==='bills'&&fd.get('kind')==='receita')?'receita':t.slice(4);let ex=S.categories.find(c=>c.type===ty&&c.name.toLowerCase()===nm.toLowerCase());if(!ex){ex={id:uid(),name:nm,type:ty,color:PAL[(S.categories.length+nc.length)%PAL.length]};nc.push(ex)}v=ex.id}
+      let v=fd.get(f);if(t==='paid'||t==='shared'){vals[f]=!!v;continue}if(t.startsWith('cat:')&&v==='__new'){const nm=String(fd.get('newcat_'+f)||'').trim();if(!nm){toast('Digite o nome da nova categoria');return}const ty=(k==='bills'&&fd.get('kind')==='receita')?'receita':t.slice(4);let ex=S.categories.find(c=>c.type===ty&&c.name.toLowerCase()===nm.toLowerCase());if(!ex){ex={id:uid(),name:nm,type:ty,color:PAL[(S.categories.length+nc.length)%PAL.length]};nc.push(ex)}v=ex.id}
       if(t==='money'){v=parseMoney(v);if(v<=0&&f==='amount'){toast('Informe um valor maior que zero');return}}
       else if(t==='day')v=Math.min(31,Math.max(1,parseInt(v)||1));
       vals[f]=v;
@@ -211,7 +211,7 @@ function openForm(k,id,pre){
       }else{vals.start=fm;vals.vers=[ver]}
     }
     S.categories.push(...nc);
-    const keep={};if(vals.date)keep.date=vals.date;if(vals.card)keep.card=vals.card;if(k==='bills'){keep.kind=vals.kind;keep.from=fd.get('from')}
+    const keep={};if(vals.who)keep.who=vals.who;if(vals.date)keep.date=vals.date;if(vals.card)keep.card=vals.card;if(k==='bills'){keep.kind=vals.kind;keep.from=fd.get('from')}
     if(k==='income'||k==='expenses'){const was=id&&it.paid;if(vals.paid&&!was)vals.paidAt=Date.now();else if(!vals.paid)vals.paidAt=null}
     if(k==='settle'&&!id)vals.at=Date.now();
     const nn=(k==='expenses'&&vals.card)?Math.min(48,Math.max(1,parseInt(fd.get('n'))||1)):1;
@@ -228,8 +228,11 @@ function openForm(k,id,pre){
       }
       toast(nn>1?nn+' parcelas lançadas':'Compra refeita sem parcelamento')
     }else{Object.assign(o,vals);if(!id)S[k].push(o)}
+    const other=keep.who&&ME&&keep.who!==ME;
+    if(other&&FILT&&!FILT[keep.who])FILT={Igor:true,Patricia:true};
     save();render();d.close();
-    if(ag){toast('Salvo. Pode lançar o próximo.');openForm(k,null,keep)}
+    if(ag){toast((other?'Salvo na área da '+keep.who+'. ':'Salvo. ')+'Pode lançar o próximo.');openForm(k,null,keep)}
+    else if(other)toast('Salvo na área da '+keep.who+' (exibindo Ambos)')
   };
   d.showModal();
 }
