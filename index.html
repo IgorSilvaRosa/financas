@@ -310,10 +310,10 @@ function ensureCardCat(){
 }
 function pixRows(m){
   const r=[];
-  S.settle.filter(x=>(x.date||'').startsWith(m)).forEach(x=>{
-    const to=x.from==='Igor'?'Patricia':'Igor';
-    r.push({id:x.id+'-s',sid:x.id,k:'pix',desc:'Acerto (Pix) enviado para '+to,amount:x.amount,date:x.date,cat:acertoCatId(),who:x.from,paid:true});
-    r.push({id:x.id+'-r',sid:x.id,k:'pix',desc:'Acerto (Pix) recebido de '+x.from,amount:-x.amount,date:x.date,cat:acertoCatId(),who:to,paid:true});
+  S.settle.filter(x=>(x.ref||(x.date||'').slice(0,7))===m).forEach(x=>{
+    const to=x.from==='Igor'?'Patricia':'Igor',pg=(x.date&&x.date.slice(0,7)!==m)?' (pago em '+x.date.split('-').reverse().slice(0,2).join('/')+')':'';
+    r.push({id:x.id+'-s',sid:x.id,k:'pix',desc:'Acerto (Pix) enviado para '+to+pg,amount:x.amount,date:x.date,cat:acertoCatId(),who:x.from,paid:true});
+    r.push({id:x.id+'-r',sid:x.id,k:'pix',desc:'Acerto (Pix) recebido de '+x.from+pg,amount:-x.amount,date:x.date,cat:acertoCatId(),who:to,paid:true});
   });
   return r.filter(vis);
 }
