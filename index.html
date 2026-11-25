@@ -89,7 +89,7 @@ const sum=a=>a.reduce((t,x)=>t+(x.amount||0),0);
 const byName=(a,b)=>a.name.localeCompare(b.name,'pt-BR');
 const cat=id=>S.categories.find(c=>c.id===id);
 const card=id=>S.cards.find(c=>c.id===id);
-const invYm=e=>{const c=card(e.card),m=e.date.slice(0,7);if(!c)return m;const cm=+e.date.slice(8,10)>c.closing?addM(m,1):m;return c.sameMonth?cm:addM(cm,1)};
+const invYm=e=>{const c=card(e.card),m=e.date.slice(0,7);if(!c)return m;if(e.inv)return e.inv;const cm=+e.date.slice(8,10)>c.closing?addM(m,1):m;return c.sameMonth?cm:addM(cm,1)};
 
 /* ---------- storage (Supabase) ---------- */
 const SB_URL='https://gpznzigdgunfyoagkkmt.supabase.co',SB_KEY='sb_publishable_567ShIRpY-VpadBXjQFo-Q_LDRAI1VU';
@@ -175,17 +175,17 @@ function openForm(k,id,pre){
     let v=it[f]!==undefined?it[f]:defs[f];let inp='';
     if(t==='text')inp='<input name="'+f+'" value="'+esc(v||'')+'" required>';
     else if(t==='money')inp='<input name="'+f+'" inputmode="decimal" placeholder="0,00" value="'+(v?(v/100).toFixed(2).replace('.',','):'')+'" required>';
-    else if(t==='date')inp='<input type="date" name="'+f+'" value="'+esc(v)+'" required>';
+    else if(t==='date')inp='<input type="date" name="'+f+'"'+(k==='expenses'&&f==='date'?' oninput="refInv()"':'')+' value="'+esc(v)+'" required>';
     else if(t==='day')inp='<input type="number" min="1" max="31" name="'+f+'" value="'+esc(v)+'" required>';
     else if(t==='month')inp='<input type="month" name="'+f+'" value="'+esc(v)+'" required>';else if(t==='shared')inp='<label style="display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" name="'+f+'"'+(v?' checked':'')+' onchange="document.getElementById(\'pb\').style.display=this.checked?\'block\':\'none\'"> '+l+'</label>';else if(t==='payer')inp='<label id="pb" style="display:'+(it.shared?'block':'none')+'">'+l+'<select name="'+f+'">'+['Igor','Patricia'].map(w=>'<option'+(w===v?' selected':'')+'>'+w+'</option>').join('')+'</select></label>';else if(t==='paid')inp='<label style="display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" name="'+f+'"'+(v?' checked':'')+'> '+l+'</label>';else if(t==='color')inp='<input type="color" name="'+f+'" value="'+esc(v)+'">';
     else if(t==='who')inp='<select name="'+f+'" onchange="const p=document.querySelector(\'#fm select[name=payer]\');if(p&&this.value!==\'Família\')p.value=this.value">'+(it.who==='Família'?WHO:['Igor','Patricia']).map(w=>'<option'+(w===v?' selected':'')+'>'+w+'</option>').join('')+'</select>';
-    else if(t==='card')inp='<select name="'+f+'" onchange="const b=document.getElementById(\'ib\');if(b)b.style.display=this.value?\'block\':\'none\'"><option value="">— nenhum —</option>'+S.cards.map(c=>'<option value="'+c.id+'"'+(c.id===v?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select>';
+    else if(t==='card')inp='<select name="'+f+'" onchange="const b=document.getElementById(\'ib\');if(b)b.style.display=this.value?\'block\':\'none\';refInv()"><option value="">— nenhum —</option>'+S.cards.map(c=>'<option value="'+c.id+'"'+(c.id===v?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select>';
     else if(t.startsWith('cat:')){const ty=(k==='bills'&&it.kind==='receita')?'receita':t.slice(4),cs=S.categories.filter(c=>c.type===ty).sort(byName);inp='<select name="'+f+'" required onchange="this.nextElementSibling.style.display=this.value===\'__new\'?\'block\':\'none\'">'+(cs.length?'<option value="">Selecione…</option>':'')+cs.map(c=>'<option value="'+c.id+'"'+(c.id===v?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'<option value="__new"'+(cs.length?'':' selected')+'>+ Nova categoria…</option></select><div style="display:'+(cs.length?'none':'block')+'"><input name="newcat_'+f+'" placeholder="Nome da nova categoria"></div>'}
     else if(t.startsWith('sel:'))inp='<select name="'+f+'"'+(f==='kind'?' onchange="refKind(this.value)"':'')+'>'+t.slice(4).split(',').map(o=>'<option'+(o===v?' selected':'')+'>'+o+'</option>').join('')+'</select>';
     {const hh=['paid','shared','payer'].includes(t)?inp:'<label>'+l+inp+'</label>';return(k==='bills'&&['shared','payer','card'].includes(f))?'<div class="dx" style="display:'+(it.kind==='receita'?'none':'block')+'">'+hh+'</div>':hh}
   }).join('');
   const d=$('#dlg');
-  d.innerHTML='<form method="dialog" id="fm"><h2 style="margin:0">'+(id?'Editar ':'Nova ')+cfg.t.toLowerCase()+'</h2>'+row+(k==='expenses'?instHtml((pre&&pre.card)||it.card||'',it.of||1,it.grp?'parc':'total',it.grp?('Parcela '+it.inst+'/'+it.of+'. Mudar o número de parcelas refaz a série inteira.'):''):'')+(k==='bills'?'<p class="mut" style="font-size:12px;margin:10px 0 0">Valor e vencimento valem a partir do mês escolhido em "Vale a partir de". Os meses anteriores não mudam.</p>':'')+'<div class="act"><button type="button" class="b" id="cn">Cancelar</button>'+(id?'':'<button type="button" class="b" id="sn">Salvar e adicionar outro</button>')+'<button class="b p">Salvar</button></div></form>';
+  d.innerHTML='<form method="dialog" id="fm"><h2 style="margin:0">'+(id?'Editar ':'Nova ')+cfg.t.toLowerCase()+'</h2>'+row+(k==='expenses'?instHtml((pre&&pre.card)||it.card||'',it.of||1,'parc',it.grp?('Parcela '+it.inst+'/'+it.of+'. Mudar o número de parcelas refaz a série inteira, repetindo o valor informado em cada parcela (ou escolha "o valor total" para manter o total da compra e dividir).'):'',it.inv||(pre&&pre.inv)||''):'')+(k==='bills'?'<p class="mut" style="font-size:12px;margin:10px 0 0">Valor e vencimento valem a partir do mês escolhido em "Vale a partir de". Os meses anteriores não mudam.</p>':'')+'<div class="act"><button type="button" class="b" id="cn">Cancelar</button>'+(id?'':'<button type="button" class="b" id="sn">Salvar e adicionar outro</button>')+'<button class="b p">Salvar</button></div></form>';
   let again=false;
   $('#cn').onclick=()=>d.close();
   if($('#sn'))$('#sn').onclick=()=>{again=true;$('#fm').requestSubmit()};
@@ -212,7 +212,8 @@ function openForm(k,id,pre){
       }else{vals.start=fm;vals.vers=[ver]}
     }
     S.categories.push(...nc);
-    const keep={};if(vals.who)keep.who=vals.who;if(vals.date)keep.date=vals.date;if(vals.card)keep.card=vals.card;if(k==='bills'){keep.kind=vals.kind;keep.from=fd.get('from')}
+    if(k==='expenses'){const ch=fd.get('inv'),au=vals.card?invYm({date:vals.date,card:vals.card,inv:null}):'';vals.inv=(vals.card&&ch&&ch!==au)?ch:null}
+    const keep={};if(vals.card&&fd.get('inv'))keep.inv=fd.get('inv');if(vals.who)keep.who=vals.who;if(vals.date)keep.date=vals.date;if(vals.card)keep.card=vals.card;if(k==='bills'){keep.kind=vals.kind;keep.from=fd.get('from')}
     if(k==='income'||k==='expenses'){const was=id&&it.paid;if(vals.paid&&!was)vals.paidAt=Date.now();else if(!vals.paid)vals.paidAt=null}
     if(k==='settle'&&!id)vals.at=Date.now();
     const nn=(k==='expenses'&&vals.card)?Math.min(48,Math.max(1,parseInt(fd.get('n'))||1)):1;
@@ -220,10 +221,12 @@ function openForm(k,id,pre){
     if(k==='expenses'&&vals.card&&(orig?(orig.grp?nn!==orig.of:nn>1):nn>1)){
       const base0=(orig&&orig.grp)?S.expenses.filter(x=>x.grp===orig.grp).map(x=>x.date).sort()[0]:vals.date;
       const desc0=vals.desc.replace(/ \(\d+\/\d+\)$/,'');
-      const tot=fd.get('mode')==='parc'?vals.amount*nn:vals.amount,base=Math.floor(tot/nn),rem=tot-base*nn,grp=nn>1?uid():null;
+      const serTot=(orig&&orig.grp)?sum(S.expenses.filter(x=>x.grp===orig.grp)):0;
+      const tot=fd.get('mode')==='parc'?vals.amount*nn:((orig&&orig.grp&&vals.amount===orig.amount)?serTot:vals.amount),base=Math.floor(tot/nn),rem=tot-base*nn,grp=nn>1?uid():null;
       if(orig)S.expenses=orig.grp?S.expenses.filter(x=>x.grp!==orig.grp):S.expenses.filter(x=>x.id!==orig.id);
       for(let i=0;i<nn;i++){
         const m=addM(base0.slice(0,7),i),p={...vals,id:uid(),amount:base+(i<rem?1:0),date:dayIn(m,+base0.slice(8,10)),paid:false,desc:desc0};
+        if(vals.inv)p.inv=addM(vals.inv,i);
         if(nn>1){p.grp=grp;p.inst=i+1;p.of=nn;p.desc=desc0+' ('+(i+1)+'/'+nn+')'}
         S.expenses.push(p)
       }
@@ -235,7 +238,7 @@ function openForm(k,id,pre){
     if(ag){toast((other?'Salvo na área da '+keep.who+'. ':'Salvo. ')+'Pode lançar o próximo.');openForm(k,null,keep)}
     else if(other)toast('Salvo na área da '+keep.who+' (exibindo Ambos)')
   };
-  d.showModal();
+  d.showModal();refInv();
 }
 function del(k,id,btn){
   if(!btn.dataset.c){btn.dataset.c=1;btn.dataset.t=btn.textContent;btn.textContent='Confirmar?';setTimeout(()=>{btn.dataset.c='';btn.textContent=btn.dataset.t},2500);return}
@@ -405,7 +408,16 @@ function backup(){
   $('#im').onchange=async e=>{try{const o=JSON.parse(await e.target.files[0].text());if(!o.categories)throw 0;S={...S,...o};save();d.close();render();toast('Dados importados')}catch(x){toast('Arquivo inválido')}};
   d.showModal();
 }
-function instHtml(c,n,mode,hint){return '<div id="ib" style="display:'+(c?'block':'none')+'"><label>Parcelas<input type="number" min="1" max="48" name="n" value="'+(n||1)+'"></label><label>O valor informado é<select name="mode"><option value="total"'+(mode==='total'?' selected':'')+'>o valor total (o sistema divide pelas parcelas)</option><option value="parc"'+(mode==='parc'?' selected':'')+'>o valor de cada parcela (o sistema repete)</option></select></label>'+(hint?'<p class="mut" style="font-size:12px;margin:6px 0 0">'+hint+'</p>':'')+'</div>'}
+function refInv(){
+  const sel=document.querySelector('#fm select[name=inv]');if(!sel)return;
+  const cid=document.querySelector('#fm select[name=card]').value,dt=document.querySelector('#fm input[name=date]').value,c=card(cid);
+  if(!c||!dt){sel.innerHTML='';return}
+  const auto=invYm({date:dt,card:cid,inv:null});let keep;
+  if(sel.dataset.pre){keep=sel.dataset.pre;sel.dataset.m=1;sel.removeAttribute('data-pre')}else keep=sel.dataset.m?sel.value:auto;
+  const ms=new Set();for(let i=-2;i<=6;i++)ms.add(addM(auto,i));ms.add(keep||auto);
+  sel.innerHTML=[...ms].sort().map(m=>'<option value="'+m+'"'+(m===(keep||auto)?' selected':'')+'>'+MN[+m.slice(5)-1]+'/'+m.slice(0,4)+' · vence '+dayIn(m,c.due).split('-').reverse().slice(0,2).join('/')+(m===auto?' (automático)':'')+'</option>').join('');
+}
+function instHtml(c,n,mode,hint,inv){return '<div id="ib" style="display:'+(c?'block':'none')+'"><label>Fatura (escolha pelo vencimento que aparece no banco)<select name="inv" data-pre="'+(inv||'')+'" onchange="this.dataset.m=1"></select></label><label>Parcelas<input type="number" min="1" max="48" name="n" value="'+(n||1)+'"></label><label>O valor informado é<select name="mode"><option value="total"'+(mode==='total'?' selected':'')+'>o valor total (o sistema divide pelas parcelas)</option><option value="parc"'+(mode==='parc'?' selected':'')+'>o valor de cada parcela (o sistema repete)</option></select></label>'+(hint?'<p class="mut" style="font-size:12px;margin:6px 0 0">'+hint+'</p>':'')+'</div>'}
 function delGrp(g,btn){if(!btn.dataset.c){btn.dataset.c=1;btn.textContent='Confirmar?';setTimeout(()=>{btn.dataset.c='';btn.textContent='Excluir todas'},2500);return}S.expenses=S.expenses.filter(e=>e.grp!==g);save();render()}
 function billsAt(m){
   return S.bills.filter(b=>(!b.start||m>=b.start)&&(!b.end||m<=b.end)).map(b=>{
